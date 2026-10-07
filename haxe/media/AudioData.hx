@@ -2,6 +2,10 @@
 package media;
 
 abstract AudioData(Int) from Int to Int {
+	public inline function slice(offset:haxe.Int64, count:haxe.Int64, timestamp:haxe.Int64):AudioData return AudioDataNative.slice(this, offset, count, timestamp);
+	public inline function retime(timestamp:haxe.Int64):AudioData return AudioDataNative.retime(this, timestamp);
+	public inline function gain(gain:Float):AudioData return AudioDataNative.gain(this, gain);
+	public inline function mix(other:AudioData, gain:Float):AudioData return AudioDataNative.mix(this, other, gain);
 	public static inline function create(init:AudioDataInit):AudioData return AudioDataNative.create(init);
 	public inline function format():AudioSampleFormat return AudioDataNative.format(this);
 	public inline function sampleRate():Float return AudioDataNative.sampleRate(this);
@@ -16,6 +20,14 @@ abstract AudioData(Int) from Int to Int {
 }
 
 private extern class AudioDataNative {
+	@:hlNative("xavi", "audio_data_slice")
+	public static function slice(self:Int, offset:haxe.Int64, count:haxe.Int64, timestamp:haxe.Int64):AudioData;
+	@:hlNative("xavi", "audio_data_retime")
+	public static function retime(self:Int, timestamp:haxe.Int64):AudioData;
+	@:hlNative("xavi", "audio_data_gain")
+	public static function gain(self:Int, gain:Float):AudioData;
+	@:hlNative("xavi", "audio_data_mix")
+	public static function mix(self:Int, other:AudioData, gain:Float):AudioData;
 	@:hlNative("xavi", "audio_data_create")
 	public static function create(init:AudioDataInit):AudioData;
 	@:hlNative("xavi", "audio_data_format")

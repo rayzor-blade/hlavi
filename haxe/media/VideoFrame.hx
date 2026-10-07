@@ -2,6 +2,10 @@
 package media;
 
 abstract VideoFrame(Int) from Int to Int {
+	public inline function retime(timestamp:haxe.Int64, duration:haxe.Int64):VideoFrame return VideoFrameNative.retime(this, timestamp, duration);
+	public inline function crop(x:haxe.Int64, y:haxe.Int64, width:haxe.Int64, height:haxe.Int64):VideoFrame return VideoFrameNative.crop(this, x, y, width, height);
+	public inline function resize(width:haxe.Int64, height:haxe.Int64):VideoFrame return VideoFrameNative.resize(this, width, height);
+	public inline function blend(other:VideoFrame, opacity:Float):VideoFrame return VideoFrameNative.blend(this, other, opacity);
 	public static inline function create(data:haxe.io.Bytes, init:VideoFrameBufferInit):VideoFrame return VideoFrameNative.create(data, init);
 	public inline function format():VideoPixelFormat return VideoFrameNative.format(this);
 	public inline function codedWidth():haxe.Int64 return VideoFrameNative.codedWidth(this);
@@ -61,6 +65,14 @@ abstract VideoFrame(Int) from Int to Int {
 }
 
 private extern class VideoFrameNative {
+	@:hlNative("xavi", "video_frame_retime")
+	public static function retime(self:Int, timestamp:haxe.Int64, duration:haxe.Int64):VideoFrame;
+	@:hlNative("xavi", "video_frame_crop")
+	public static function crop(self:Int, x:haxe.Int64, y:haxe.Int64, width:haxe.Int64, height:haxe.Int64):VideoFrame;
+	@:hlNative("xavi", "video_frame_resize")
+	public static function resize(self:Int, width:haxe.Int64, height:haxe.Int64):VideoFrame;
+	@:hlNative("xavi", "video_frame_blend")
+	public static function blend(self:Int, other:VideoFrame, opacity:Float):VideoFrame;
 	@:hlNative("xavi", "video_frame_create")
 	public static function create(data:haxe.io.Bytes, init:VideoFrameBufferInit):VideoFrame;
 	@:hlNative("xavi", "video_frame_format")
