@@ -40,6 +40,7 @@ Controls:
 | Home | Seek to the start |
 | Click the bottom bar | Seek to a position in the file |
 | M | Mute/unmute |
+| E | Toggle the bass/treble equalizer preset |
 | F | Toggle fullscreen |
 | Escape | Close |
 
@@ -67,7 +68,7 @@ HashLink builds add `-D ash_future_stock` and expose that directory through the
 OS library loader path as described in hlavi's README.
 
 The public playback API is `media.MediaPlayer`: `open`, `play`, `pause`, `seek`,
-`setVolume`, timing/state getters, `pollFrame`, `takeFrame`, and `close`.
+`setVolume`, `setEqualizer`, `clearEqualizer`, timing/state getters, `pollFrame`, `takeFrame`, and `close`.
 `pollFrame` keeps at most one decoded frame until `takeFrame` transfers it to
 the caller. The caller uses the standard `VideoFrame.copyTo` and `close` methods.
 AVFoundation's audio and video share one native clock. Polling late skips old
@@ -86,7 +87,7 @@ the supplied sample.
 python3 scripts/run_player.py --build --offline
 
 # Exercises decode/render, pause, seek, resize, volume, resume, EOF,
-# invalid inputs, frame ownership, and closed-handle errors.
+# equalizer updates and source-handle ownership, invalid inputs, frame ownership, and closed-handle errors.
 python3 scripts/run_player.py --self-test
 
 # Optional window-only screenshot (requires macOS Screen Recording access).

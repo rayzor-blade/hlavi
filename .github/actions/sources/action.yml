@@ -1,5 +1,5 @@
-name: Pinned native sources
-description: Check out the xavi implementation and x-idl generator beside hlavi.
+name: Released xavi SDK
+description: Download and verify the xavi SDK used by every desktop and mobile adapter build.
 runs:
   using: composite
   steps:
@@ -10,27 +10,15 @@ runs:
         python3 scripts/release_check.py pins
         python3 - <<'PY' >> "$GITHUB_OUTPUT"
         import json
-        sources = json.load(open('release-sources.json'))
-        for name in ['xavi', 'x-idl', 'hashlink']:
-            key = name.replace('-', '_')
-            print(f"{key}_repo={sources[name]['repository']}")
-            print(f"{key}_rev={sources[name]['revision']}")
+        source = json.load(open('release-sources.json'))['hashlink']
+        print(f"hashlink_repo={source['repository']}")
+        print(f"hashlink_rev={source['revision']}")
         PY
-    - uses: actions/checkout@v7
-      with:
-        repository: ${{ steps.pins.outputs.xavi_repo }}
-        ref: ${{ steps.pins.outputs.xavi_rev }}
-        path: xavi
-        persist-credentials: false
-    - uses: actions/checkout@v7
-      with:
-        repository: ${{ steps.pins.outputs.x_idl_repo }}
-        ref: ${{ steps.pins.outputs.x_idl_rev }}
-        path: x-idl
-        persist-credentials: false
     - shell: bash
       working-directory: hlavi
-      run: python3 scripts/release_check.py pins --checkouts
+      run: |
+        python3 scripts/fetch_xavi.py
+        python3 scripts/release_check.py pins --sdk
 outputs:
   hashlink_repository:
     description: HashLink source for the Windows import library

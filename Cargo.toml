@@ -15,7 +15,8 @@ test = false
 doctest = false
 
 [dependencies]
-# CI checks out these sibling sources at the revisions in release-sources.json.
+# CI downloads xavi-sdk.zip at the release/revision in release-sources.json.
+# Its portable sources unpack here; sibling Git checkouts also work locally.
 xavi-core = { path = "../xavi/crates/xavi-core" }
 xavi-backend = { path = "../xavi/crates/xavi-backend" }
 # Reuse hlwgpu's carriers, including managed records, GC roots and Ash Futures.

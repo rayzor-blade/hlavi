@@ -1,5 +1,6 @@
 import gpu.*;
 import media.MediaPlayer;
+import media.AudioEqualizer;
 import media.PlaybackState;
 import media.VideoFrame;
 import media.VideoFrameCopyToOptions;
@@ -27,6 +28,8 @@ class VideoPlayer {
     var textureView:GpuTextureView = 0;
     var group:GpuBindGroup = 0;
     var player:MediaPlayer = 0;
+    var equalizer:AudioEqualizer = 0;
+    var eqEnabled = false;
     var format:TextureFormat;
     var alpha:AlphaMode;
     var pixels:Bytes;
@@ -143,9 +146,16 @@ class VideoPlayer {
         descriptor.minFilter(FilterMode.Linear);
         sampler = device.sampler(descriptor);
         player = MediaPlayer.open(path);
+        equalizer = AudioEqualizer.create(3);
+        equalizer.setBand(0, 100, 6, 0.7);
+        equalizer.setBand(1, 1000, -2, 1);
+        equalizer.setBand(2, 8000, 3, 0.7);
+        equalizer.setPreamp(-9); // Headroom for boosted bands.
+        equalizer.setBypass(true);
+        player.setEqualizer(equalizer);
         player.play();
         Sys.println('Playing $source on ${adapter.name()}');
-        Sys.println("Space: pause/resume · ←/→: seek 5s · Home: restart · M: mute · F: fullscreen · Esc: close");
+        Sys.println("Space: pause/resume · ←/→: seek 5s · Home: restart · M: mute · E: equalizer · F: fullscreen · Esc: close");
         Sys.println("Click the seek bar at the bottom of the window to seek.");
     }
     function upload(frame:VideoFrame):Void {
@@ -225,6 +235,11 @@ class VideoPlayer {
             case KeyM:
                 muted = !muted;
                 player.setVolume(muted ? 0 : 1);
+            case KeyE:
+                eqEnabled = !eqEnabled;
+                equalizer.setBypass(!eqEnabled);
+                player.setEqualizer(equalizer); // Copies settings; preserves player history.
+                Sys.println(eqEnabled ? "Equalizer on (bass/treble preset, -9 dB preamp)" : "Equalizer bypassed");
             case KeyF: window.setFullscreen(!window.isFullscreen());
             case Escape: closed = true;
             default:
@@ -273,7 +288,7 @@ class VideoPlayer {
             var state = player.state();
             if (now >= titleAt) {
                 var status = state == PlaybackState.Ended ? "Ended" : paused ? "Paused" : state == PlaybackState.Buffering ? "Buffering" : "Playing";
-                window.setTitle('$source  ·  ${clock(player.position())} / ${clock(player.duration())}  ·  $status${muted ? " · Muted" : ""}');
+                window.setTitle('$source  ·  ${clock(player.position())} / ${clock(player.duration())}  ·  $status${muted ? " · Muted" : ""}${eqEnabled ? " · EQ" : ""}');
                 titleAt = now + 0.25;
             }
             check(frames > 0 || now - started < 20, "no decoded video frame within 20 seconds");
@@ -286,6 +301,8 @@ class VideoPlayer {
                         rejects(() -> player.seek(-1));
                         rejects(() -> player.setVolume(2));
                         rejects(() -> { player.takeFrame(); });
+                        key(KeyCode.KeyE);
+                        check(eqEnabled, "equalizer enable failed");
                         player.pause(); paused = true;
                         pausePosition = player.position(); phaseAt = now; phase = 1;
                     case 1 if (now - phaseAt > 0.3):
@@ -298,6 +315,13 @@ class VideoPlayer {
                     case 2 if (frames > seekFrames && state != PlaybackState.Buffering):
                         check(Math.abs(lastTimestamp - seekTarget) < 0.2, 'seek frame $lastTimestamp does not match $seekTarget');
                         player.setVolume(1); check(player.volume() == 1, "unmute failed");
+                        // A temporary source can be closed after its settings are copied.
+                        var temporary = AudioEqualizer.create(1);
+                        temporary.setBand(0, 500, -12, 1);
+                        player.setEqualizer(temporary);
+                        temporary.close();
+                        player.clearEqualizer();
+                        player.setEqualizer(equalizer);
                         player.play(); paused = false; phaseAt = now; phase = 3;
                     case 3 if (now - phaseAt > 0.5):
                         check(player.position() > seekTarget + 0.2, "resume did not advance the clock");
@@ -305,7 +329,7 @@ class VideoPlayer {
                     case 4 if (state == PlaybackState.Ended):
                         check(frames > 10 && presented > 10, "not enough frames were rendered");
                         check(device.takeError() == null, "GPU reported a validation error");
-                        Sys.println("PLAYER PASS: decode, render, pause, seek, resize, volume, resume, end-of-file");
+                        Sys.println("PLAYER PASS: decode, render, pause, seek, resize, volume, equalizer, resume, end-of-file");
                         player.close();
                         rejects(() -> { player.position(); });
                         player.close();
@@ -322,6 +346,7 @@ class VideoPlayer {
     }
     function close():Void {
         if (player != 0) player.close();
+        if (equalizer != 0) equalizer.close();
         if (group != 0) group.destroy();
         if (textureView != 0) textureView.destroy();
         if (texture != 0) texture.destroy();

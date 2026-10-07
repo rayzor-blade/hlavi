@@ -15,6 +15,8 @@ abstract MediaPlayer(Int) from Int to Int {
 	public inline function pause():Void MediaPlayerNative.pause(this);
 	public inline function seek(seconds:Float):Void MediaPlayerNative.seek(this, seconds);
 	public inline function setVolume(volume:Float):Void MediaPlayerNative.setVolume(this, volume);
+	public inline function setEqualizer(equalizer:AudioEqualizer):Void MediaPlayerNative.setEqualizer(this, equalizer);
+	public inline function clearEqualizer():Void MediaPlayerNative.clearEqualizer(this);
 	public inline function pollFrame():Bool return MediaPlayerNative.pollFrame(this);
 	public inline function takeFrame():VideoFrame return MediaPlayerNative.takeFrame(this);
 	public inline function close():Void MediaPlayerNative.close(this);
@@ -39,6 +41,10 @@ private extern class MediaPlayerNative {
 	public static function seek(self:Int, seconds:Float):Void;
 	@:hlNative("xavi", "media_player_set_volume")
 	public static function setVolume(self:Int, volume:Float):Void;
+	@:hlNative("xavi", "media_player_set_equalizer")
+	public static function setEqualizer(self:Int, equalizer:AudioEqualizer):Void;
+	@:hlNative("xavi", "media_player_clear_equalizer")
+	public static function clearEqualizer(self:Int):Void;
 	@:hlNative("xavi", "media_player_poll_frame")
 	public static function pollFrame(self:Int):Bool;
 	@:hlNative("xavi", "media_player_take_frame")

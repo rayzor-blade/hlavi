@@ -89,23 +89,69 @@ runs on macOS, Windows, and Linux; mobile hosts use the same native playback API
 See the [example guide](examples/player/README.md) for controls and platform
 requirements.
 
+## Equalize audio
+
+Use the same equalizer for PCM processing and the video player's sound:
+
+```haxe
+import media.AudioEqualizer;
+
+var eq = AudioEqualizer.create(3);
+eq.setBand(0, 100, 6, 0.7);    // Index, center frequency (Hz), gain (dB), Q.
+eq.setBand(1, 1000, -2, 1);
+eq.setBand(2, 8000, 3, 0.7);
+eq.setPreamp(-9);              // Leave headroom for boosted frequencies.
+
+// Given an open MediaPlayer:
+player.setEqualizer(eq);
+// Later changes are explicit: modify eq, then call setEqualizer again.
+// player.clearEqualizer() restores flat playback.
+
+// Alternatively, given a decoded AudioData block:
+var filtered = eq.process(block);
+// Send filtered to AudioEncoder or a MediaQueue, then close your handle.
+filtered.close();
+eq.close();                    // The player keeps its own settings and history.
+```
+
+The [video player](examples/player/README.md) toggles a bass/treble preset with
+**E**. Playback uses the shared native DSP on macOS, iOS, Windows, Android, and
+Linux; it adds no FFmpeg dependency. Applications only call Haxe methods.
+
+An equalizer supports 1–16 peaking bands. Frequency is 1–96000 Hz, gain is
+−24…+24 dB, and Q is 0.1–20 (larger values make a narrower band). Bands start
+disabled; `disableBand(index)` disables one. `setPreamp` accepts −60…0 dB;
+`setBypass(true)` bypasses both bands and preamp. Settings changes transition
+over 10 ms. Bands at or above half the input sample rate are inactive.
+
+`process` returns owned interleaved F32 with the input timing and channel count.
+Keep one equalizer per PCM stream: history carries across contiguous blocks,
+resets on timestamp gaps or format changes, and can be cleared with `reset()`.
+It accepts integer/float and planar/interleaved PCM, 1000–384000 Hz and 1–32
+channels, up to 64 MiB per converted block. Processing preserves finite values
+above full scale; native playback clips at its output boundary. Reduce preamp
+when boosting to avoid clipping. Close every returned audio block.
+
 ## Current API
 
 The generated native surface currently provides:
 
-- `AudioData`: owned PCM, format conversion, plane copies, and cloning.
-- `VideoFrame`: owned CPU pixels, metadata, layout/crop copies, and cloning.
+- `AudioData`: owned PCM, format conversion, copying, slicing, gain, mixing, and retiming.
+- `AudioEqualizer`: stateful multiband PCM filtering and copied playback settings.
+- `VideoFrame`: owned CPU pixels, metadata, copying, cropping, resizing, blending, and retiming.
 - `EncodedAudioChunk` and `EncodedVideoChunk`: owned encoded bytes and timing.
 - `PlaneLayouts`: the result of `VideoFrame.copyTo`, carried by `ash.Future`.
 - `MediaPlayer`: native file playback with audio, a shared playback clock,
   pause/seek/volume controls, and polled video frames on macOS, iOS, Windows, Android, and Linux.
 
-xavi's native AAC/H.264 codecs and MP4 writers are available to Rust callers.
-Their lower-level worker scheduling, callbacks, streaming queues, and runtime
-bindings are not exported to Haxe yet. `MediaPlayer` already exposes complete
-file playback through the native framework, independently of those sessions. Device capture,
-packet-level container reading, GPU frames, and browser media are also outside this initial
-surface. The adapter includes no FFmpeg dependency or fallback.
+- `MediaQueue`: bounded audio/video/chunk/byte queues with explicit backpressure.
+- `AudioEncoder`, `VideoEncoder`, `AudioDecoder`, `VideoDecoder`, and
+  `CodecConfiguration`: native codec sessions driven by polling from Haxe.
+- `MediaDemuxer` and `MediaMuxer`: incremental MP4 packet reading and writing
+  within xavi's current AAC/H.264 codec and container profile.
+
+Device capture, GPU frames, and browser media remain outside this surface.
+The adapter includes no FFmpeg dependency or fallback.
 
 ## Runtime behavior
 
@@ -177,10 +223,21 @@ The workflow publishes `hlavi.zip`, `hdlls.json`, separate
 The desktop libraries are downloaded by the macro, not bundled in the Haxelib.
 Publishing a GitHub release does not upload it to the Haxelib registry.
 
-`release-sources.json` pins the xavi implementation, x-idl generator, and
-HashLink source used for the Windows import library. CI checks out those
-revisions beside hlavi and uses `Cargo.lock` for Rust dependencies. Update
-those pins together with regenerated Haxe sources when upgrading xavi.
+`release-sources.json` selects a versioned or nightly **xavi SDK release** and
+its exact source revision, plus the HashLink source for the Windows import
+library. Every desktop and mobile job downloads `xavi-sdk.zip` from xavi's
+GitHub release, checks `SHA256SUMS`, and verifies its revision and source-file
+checksums. x-idl is bundled by xavi; hlavi no longer checks out either project
+in CI. The portable SDK compiles into hlavi's native adapter for each target.
+Application users still receive finished native libraries via `NativeInstall`.
+
+Change the xavi `tag` to a published `v<version>` or `nightly` and record the
+revision from that SDK's `xavi-sdk.json`. Update the pin and regenerated Haxe
+sources together when upgrading. Nightly builds are revision-pinned too: if
+the rolling asset changes, CI fails rather than mixing different SDKs across
+platforms. A release using a newer xavi commit must wait for xavi's publishing
+workflow to complete. Use versioned xavi releases for reproducible long-term
+builds; the rolling nightly asset is replaced by subsequent builds.
 
 Maintainers can test packaging using a directory containing every desktop
 release asset built by CI:
@@ -207,9 +264,19 @@ workspace/
   ash/       # optional: local VM and ash-future sources for tests
 ```
 
-Use the revisions in `release-sources.json` to reproduce a release. Path
-dependencies also allow local xavi/x-idl changes during development; CI uses
-the recorded commits and verifies generated-source drift.
+For a clean checkout without xavi/x-idl siblings, install the pinned release:
+
+```sh
+python3 scripts/fetch_xavi.py
+python3 scripts/release_check.py pins --sdk
+```
+
+The downloader refuses to overwrite an existing developer checkout. To use
+Git siblings, check out xavi's pinned revision and the x-idl revision in
+**xavi's** `release-sources.json`; `python3 scripts/release_check.py pins
+--checkouts` verifies both. Path dependencies allow local xavi/x-idl changes
+during development. CI uses the released SDK and checks generated-source drift.
+No Rust/C toolchain is required by end users installing the Haxelib release.
 
 With Rust, Python 3, and the platform build tools installed:
 

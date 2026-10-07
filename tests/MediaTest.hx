@@ -136,10 +136,47 @@ class MediaTest {
         fails(() -> { video.timestamp(); }, "closed");
         Sys.println("encoded chunks: PASS");
     }
+    static function equalizer():Void {
+        var eq = AudioEqualizer.create(2);
+        check(eq.bandCount() == 2 && !eq.bandEnabled(0), "equalizer initial bands");
+        eq.setBand(0, 1000, 6, 2);
+        check(eq.bandFrequency(0) == 1000 && eq.bandGain(0) == 6 && eq.bandQ(0) == 2, "equalizer band settings");
+        fails(() -> eq.setBand(-1, 1000, 0, 1), "index");
+        fails(() -> eq.setBand(0, 1000, 25, 1), "gain");
+        var source = Bytes.alloc(4800 * 4);
+        for (sample in 0...4800) source.setFloat(sample * 4, 0.1 * Math.sin(2 * Math.PI * 1000 * sample / 48000));
+        var input = AudioData.create(new AudioDataInit(AudioSampleFormat.F32, 48000, i(4800), i(1), i(0), source));
+        var processed = eq.process(input);
+        var output = Bytes.alloc(source.length);
+        processed.copyTo(output, new AudioDataCopyToOptions(i(0)));
+        var originalPower = 0.0;
+        var processedPower = 0.0;
+        for (sample in 2400...4800) {
+            var a = source.getFloat(sample * 4);
+            var b = output.getFloat(sample * 4);
+            originalPower += a * a; processedPower += b * b;
+        }
+        var gainDb = 10 * Math.log(processedPower / originalPower) / Math.log(10);
+        check(Math.abs(gainDb - 6) < 0.01, 'equalizer frequency gain $gainDb');
+        processed.close();
+        eq.setPreamp(-6);
+        check(eq.preamp() == -6, "equalizer preamp");
+        eq.setBypass(true);
+        check(eq.bypassed(), "equalizer bypass");
+        eq.reset();
+        var bypassed = eq.process(input);
+        eq.close(); eq.close(); input.close();
+        bypassed.copyTo(output, new AudioDataCopyToOptions(i(0)));
+        check(output.compare(source) == 0, "equalizer bypass/source ownership");
+        bypassed.close();
+        fails(() -> { eq.bandCount(); }, "closed");
+        Sys.println("equalizer: PASS");
+    }
     static function main():Void {
         audio();
         video();
         chunks();
+        equalizer();
         gc();
         Sys.println("PASS");
     }
