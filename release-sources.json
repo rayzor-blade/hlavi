@@ -2,7 +2,7 @@
   "xavi": {
     "repository": "rayzor-blade/xavi",
     "tag": "nightly",
-    "revision": "cb44562d8e6a6ee731102863813ca768cf8a003f"
+    "revision": "8ab5c2df877e65e1f5ed58f734e577829412eddd"
   },
   "hashlink": {
     "repository": "HaxeFoundation/hashlink",

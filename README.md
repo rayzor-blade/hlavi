@@ -225,19 +225,20 @@ Publishing a GitHub release does not upload it to the Haxelib registry.
 
 `release-sources.json` selects a versioned or nightly **xavi SDK release** and
 its exact source revision, plus the HashLink source for the Windows import
-library. Every desktop and mobile job downloads `xavi-sdk.zip` from xavi's
-GitHub release, checks `SHA256SUMS`, and verifies its revision and source-file
-checksums. x-idl is bundled by xavi; hlavi no longer checks out either project
+library. Every desktop and mobile job downloads the SDK from xavi's GitHub
+release and verifies its archive checksum, revision, and source-file checksums.
+Versioned releases use `xavi-sdk.zip` and `SHA256SUMS`. Nightly builds use
+`xavi-sdk-<revision>.zip` and its `.sha256` checksum, which remain available
+when newer nightlies publish. x-idl is bundled by xavi; hlavi checks out neither project
 in CI. The portable SDK compiles into hlavi's native adapter for each target.
 Application users still receive finished native libraries via `NativeInstall`.
 
 Change the xavi `tag` to a published `v<version>` or `nightly` and record the
 revision from that SDK's `xavi-sdk.json`. Update the pin and regenerated Haxe
-sources together when upgrading. Nightly builds are revision-pinned too: if
-the rolling asset changes, CI fails rather than mixing different SDKs across
-platforms. A release using a newer xavi commit must wait for xavi's publishing
-workflow to complete. Use versioned xavi releases for reproducible long-term
-builds; the rolling nightly asset is replaced by subsequent builds.
+sources together when upgrading. All jobs use the same pinned revision even
+if the rolling nightly advances while they run. A release using a newer xavi
+commit must wait for xavi's publishing workflow to complete; the downloader
+does not fall back to an unpinned SDK when a snapshot is missing.
 
 Maintainers can test packaging using a directory containing every desktop
 release asset built by CI:

@@ -124,6 +124,13 @@ def download(url):
         return response.read()
 
 
+def release_assets(source):
+    if source["tag"] == "nightly":
+        stem = f"xavi-sdk-{source['revision']}"
+        return f"{stem}.zip", f"{stem}.sha256"
+    return SDK, "SHA256SUMS"
+
+
 def fetch(destination, source, base_url=None):
     if any((destination / name).exists() for name in ["xavi", "x-idl", MANIFEST]):
         try:
@@ -131,17 +138,18 @@ def fetch(destination, source, base_url=None):
         except (OSError, ValueError) as error:
             raise ValueError("existing sources are not this SDK; use sibling checkouts for development or an empty workspace for release packages") from error
     base = base_url or f"https://github.com/{source['repository']}/releases/download/{source['tag']}"
-    checksums = download(f"{base.rstrip('/')}/SHA256SUMS").decode()
-    matches = re.findall(rf"^([0-9a-f]{{64}})  {re.escape(SDK)}$", checksums, re.MULTILINE)
+    asset, checksum = release_assets(source)
+    checksums = download(f"{base.rstrip('/')}/{checksum}").decode()
+    matches = re.findall(rf"^([0-9a-f]{{64}})  {re.escape(asset)}$", checksums, re.MULTILINE)
     if len(matches) != 1:
-        raise ValueError("release SHA256SUMS must name exactly one xavi-sdk.zip")
-    return unpack(download(f"{base.rstrip('/')}/{SDK}"), matches[0], destination, source)
+        raise ValueError(f"release checksum must name exactly one {asset}")
+    return unpack(download(f"{base.rstrip('/')}/{asset}"), matches[0], destination, source)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--destination", type=Path, default=ROOT.parent)
-    parser.add_argument("--base-url", help="mirror containing xavi-sdk.zip and SHA256SUMS")
+    parser.add_argument("--base-url", help="mirror containing this version's or revision's SDK ZIP and checksum")
     parser.add_argument("--archive", type=Path, help="install a downloaded SDK instead of using the network")
     parser.add_argument("--sha256", help="required checksum for --archive")
     args = parser.parse_args()

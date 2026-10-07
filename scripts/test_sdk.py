@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import patch
 from zipfile import ZipFile, ZipInfo
 
-from fetch_xavi import MANIFEST, SDK, fetch, unpack, verify
+from fetch_xavi import MANIFEST, SDK, fetch, release_assets, unpack, verify
 
 
 class SdkTest(unittest.TestCase):
@@ -46,8 +46,9 @@ class SdkTest(unittest.TestCase):
         for tag in ["nightly", "v0.1.0"]:
             self.source["tag"] = tag
             data, digest = self.archive()
-            routes = {f"https://example.test/{tag}/SHA256SUMS": f"{digest}  {SDK}\n".encode(),
-                      f"https://example.test/{tag}/{SDK}": data}
+            asset, checksum = release_assets(self.source)
+            routes = {f"https://example.test/{tag}/{checksum}": f"{digest}  {asset}\n".encode(),
+                      f"https://example.test/{tag}/{asset}": data}
             destination = self.work / tag
             with patch("fetch_xavi.download", side_effect=routes.__getitem__) as download:
                 installed = fetch(destination, self.source, f"https://example.test/{tag}")
@@ -56,6 +57,22 @@ class SdkTest(unittest.TestCase):
                 download.side_effect = AssertionError("verified installation must work offline")
                 self.assertEqual(fetch(destination, self.source), installed)
             self.assertEqual(verify(destination, self.source), installed)
+
+    def test_pinned_nightly_remains_available_after_the_rolling_release_advances(self):
+        data, digest = self.archive()
+        revision = self.source["revision"]
+        base = "https://example.test/nightly"
+        asset = f"xavi-sdk-{revision}.zip"
+        newer, newer_digest = self.archive({"revision": "c" * 40})
+        routes = {f"{base}/{asset}": data,
+                  f"{base}/xavi-sdk-{revision}.sha256": f"{digest}  {asset}\n".encode(),
+                  f"{base}/{SDK}": newer,
+                  f"{base}/SHA256SUMS": f"{newer_digest}  {SDK}\n".encode()}
+        with patch("fetch_xavi.download", side_effect=routes.__getitem__) as download:
+            installed = fetch(self.work, self.source, base)
+        self.assertEqual(installed["revision"], revision)
+        self.assertEqual([call.args[0] for call in download.call_args_list],
+                         [f"{base}/xavi-sdk-{revision}.sha256", f"{base}/{asset}"])
 
     def test_moved_nightly_or_dirty_sdk_is_rejected_before_installation(self):
         for changes in [{"revision": "c" * 40}, {"tag": "v9.0.0"}, {"dirty": True}]:
