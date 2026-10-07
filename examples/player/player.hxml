@@ -1,0 +1,6 @@
+-lib hlavi
+-lib hlwgpu
+-lib hlwindow
+-cp examples/player
+-main VideoPlayer
+-hl target/player/player.hl

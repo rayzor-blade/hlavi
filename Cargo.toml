@@ -1,0 +1,33 @@
+[package]
+name = "hlavi"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/rayzor-blade/hlavi"
+description = "xavi's media adapter for Ash and HashLink, loaded as xavi.hdll"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+# The generated primitives import VM symbols. Exercise them in a real VM with
+# scripts/test_native.py, rather than linking a Rust test runner as a host.
+test = false
+doctest = false
+
+[dependencies]
+# Development checkouts: xavi's current commits are not published yet.
+xavi-core = { path = "../xavi/crates/xavi-core" }
+xavi-backend = { path = "../xavi/crates/xavi-backend" }
+# Reuse hlwgpu's carriers, including managed records, GC roots and Ash Futures.
+hl_xidl = { git = "https://github.com/rayzor-blade/hlwgpu.git", rev = "8c330296253235bea752cc444c96a6c7cd6114bc" }
+hl_abi = { git = "https://github.com/rayzor-blade/hl_abi" }
+ash_future_abi = { git = "https://github.com/rayzor-blade/ash.git", rev = "ac80cdb17c9fe82a0e86ab893e9d7304d5319fe6" }
+
+[build-dependencies]
+xavi-backend = { path = "../xavi/crates/xavi-backend" }
+xavi-bindgen = { path = "../xavi/crates/xavi-bindgen" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
