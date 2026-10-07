@@ -1,0 +1,14 @@
+{
+  "xavi": {
+    "repository": "rayzor-blade/xavi",
+    "revision": "d721212e7544a9f01ff66f114183553f26560218"
+  },
+  "x-idl": {
+    "repository": "rayzor-blade/x-idl",
+    "revision": "bf1ab2f262c00438f26e261a45822e3fbd6db76a"
+  },
+  "hashlink": {
+    "repository": "HaxeFoundation/hashlink",
+    "revision": "742581569d4052babac359658e443e42c7c3e0c7"
+  }
+}

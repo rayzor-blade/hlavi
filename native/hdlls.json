@@ -1,0 +1,11 @@
+{
+  "repository": "rayzor-blade/hlavi",
+  "tag": "v0.1.0",
+  "platforms": {
+    "linux-x86_64": { "releaseAsset": "xavi-linux-x86_64.hdll", "packagePath": "native/linux-x86_64/xavi.hdll" },
+    "linux-aarch64": { "releaseAsset": "xavi-linux-aarch64.hdll", "packagePath": "native/linux-aarch64/xavi.hdll" },
+    "macos-aarch64": { "releaseAsset": "xavi-macos-aarch64.hdll", "packagePath": "native/macos-aarch64/xavi.hdll" },
+    "macos-x86_64": { "releaseAsset": "xavi-macos-x86_64.hdll", "packagePath": "native/macos-x86_64/xavi.hdll" },
+    "windows-x86_64": { "releaseAsset": "xavi-windows-x86_64.hdll", "packagePath": "native/windows-x86_64/xavi.hdll" }
+  }
+}

@@ -15,7 +15,7 @@ test = false
 doctest = false
 
 [dependencies]
-# Development checkouts: xavi's current commits are not published yet.
+# CI checks out these sibling sources at the revisions in release-sources.json.
 xavi-core = { path = "../xavi/crates/xavi-core" }
 xavi-backend = { path = "../xavi/crates/xavi-backend" }
 # Reuse hlwgpu's carriers, including managed records, GC roots and Ash Futures.

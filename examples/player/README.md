@@ -50,8 +50,9 @@ upload buffer/texture, and releases media/GPU/window resources on exit.
 
 ## Application developers: prebuilt Haxelibs
 
-Install the `hlavi.zip`, `hlwgpu.zip`, `hlwindow.zip`, and `ash-future.zip` packages
-for your host, then compile from this example checkout:
+Install `hlavi.zip` from the hlavi GitHub Actions release, along with the
+`hlwgpu.zip`, `hlwindow.zip`, and `ash-future.zip` release packages, then compile
+from this example checkout:
 
 ```sh
 haxe examples/player/player.hxml
@@ -59,7 +60,9 @@ ash target/player/player.hl examples/assets/30903-383991331.mp4
 ```
 
 No Rust, C, custom native functions, or bridge code is required in an application.
-The Haxelib macros place the native libraries beside the bytecode. Stock
+hlavi's `NativeInstall` macro downloads the matching host library from that
+release, verifies its checksum, caches it, and stages it beside the bytecode.
+The other Haxelib macros stage their native libraries too. Stock
 HashLink builds add `-D ash_future_stock` and expose that directory through the
 OS library loader path as described in hlavi's README.
 
@@ -89,9 +92,8 @@ python3 scripts/run_player.py --self-test
 # Optional window-only screenshot (requires macOS Screen Recording access).
 python3 scripts/run_player.py --seconds 5 --capture /tmp/player.png
 
-# Build a native Haxelib ZIP for applications; no Rust sources in the archive.
-python3 scripts/build.py --release
-python3 scripts/package_haxelib.py
+# Verify release packaging and NativeInstall's download/cache flow.
+python3 scripts/test_distribution.py
 ```
 
 ## Validation
@@ -103,6 +105,6 @@ Windows and the generated adapters compile for their targets; Windows playback
 still needs a runtime test on a Windows machine. Mobile checks exercise the
 native library; the desktop Haxe example is not a packaged mobile application.
 
-The local prebuilt archive includes macOS ARM64 and the Linux x86_64 build
-from the NUC. Linux users still need compatible system libraries and GStreamer
-plugins; it is not a static, distribution-independent binary.
+GitHub Actions produces the release binaries for each supported target.
+Linux users still need compatible system libraries and GStreamer plugins;
+the Linux binary is not a static, distribution-independent build.

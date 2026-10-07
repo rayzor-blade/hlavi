@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        shell: bash
+        working-directory: hlavi
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: hlavi
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: ./hlavi/.github/actions/sources
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hlavi
+      - uses: krdlab/setup-haxe@v2
+        with:
+          haxe-version: 4.3.6
+      - run: python3 scripts/test_distribution.py
+      - run: cargo fmt -p hlavi -- --check
+      - run: cargo clippy -p hlavi --lib --locked -- -D warnings
+      - name: Check generated Haxe sources
+        run: |
+          git diff --exit-code -- haxe/media
+          test -z "$(git ls-files --others --exclude-standard haxe/media)"

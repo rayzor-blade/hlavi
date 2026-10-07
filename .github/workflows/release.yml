@@ -1,0 +1,267 @@
+name: release
+
+# Version tags publish immutable versions; scheduled runs update nightly.
+# A manual run without a tag builds and packages without publishing.
+on:
+  push:
+    tags: ['v*']
+  schedule:
+    - cron: '37 3 * * *'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'v<version> or nightly to publish; leave empty to validate only'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.plan.outputs.tag }}
+      build: ${{ steps.plan.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          INPUT: ${{ inputs.release_tag }}
+        run: |
+          case $EVENT in
+            schedule) tag=nightly ;;
+            push) tag=$GITHUB_REF_NAME ;;
+            *) tag=$INPUT ;;
+          esac
+          if [ -n "$tag" ] && [ "$tag" != nightly ]; then
+            python3 -c 'import sys; sys.path.insert(0, "scripts"); from package_haxelib import version_of; assert sys.argv[1].startswith("v"); print(version_of(sys.argv[1]))' "$tag"
+            # Manual version releases must build the corresponding tag.
+            current=$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha)
+            test "$current" = "$GITHUB_SHA"
+          fi
+          python3 scripts/release_check.py pins
+          build=true
+          if [ "$EVENT" = schedule ]; then
+            current=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/nightly" --jq .target_commitish 2>/dev/null || true)
+            [ "$current" = "$GITHUB_SHA" ] && build=false
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+
+  check:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    uses: ./.github/workflows/ci.yml
+
+  native:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, platform: macos-aarch64, target: aarch64-apple-darwin }
+          - { os: macos-latest, platform: macos-x86_64, target: x86_64-apple-darwin }
+          - { os: ubuntu-24.04, platform: linux-x86_64, target: x86_64-unknown-linux-gnu }
+          - { os: ubuntu-24.04-arm, platform: linux-aarch64, target: aarch64-unknown-linux-gnu }
+          - { os: windows-2022, platform: windows-x86_64, target: x86_64-pc-windows-msvc }
+    defaults:
+      run:
+        shell: bash
+        working-directory: hlavi
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: hlavi
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: ./hlavi/.github/actions/sources
+        id: sources
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hlavi
+          shared-key: release-${{ matrix.platform }}
+      - uses: actions/checkout@v7
+        if: runner.os == 'Windows'
+        with:
+          repository: ${{ steps.sources.outputs.hashlink_repository }}
+          ref: ${{ steps.sources.outputs.hashlink_revision }}
+          path: hashlink
+          persist-credentials: false
+      - name: Build the Windows VM import library
+        if: runner.os == 'Windows'
+        run: |
+          cmake -S ../hashlink -B ../hashlink/build -DWITH_VM=ON \
+            -DWITH_FMT=OFF -DWITH_HEAPS=OFF -DWITH_OPENAL=OFF -DWITH_SDL=OFF \
+            -DWITH_SQLITE=OFF -DWITH_SSL=OFF -DWITH_UI=OFF -DWITH_UV=OFF -DWITH_VIDEO=OFF
+          cmake --build ../hashlink/build --config Release --target libhl
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          libraries = list(Path('../hashlink/build').rglob('libhl.lib'))
+          assert len(libraries) == 1, libraries
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              print(f'HL_LIB_DIR={libraries[0].resolve().parent}', file=output)
+          PY
+      - name: Build and name the release asset
+        env:
+          TARGET: ${{ matrix.target }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          python3 scripts/build.py --release --target "$TARGET"
+          git diff --exit-code -- haxe/media
+          test -z "$(git ls-files --others --exclude-standard haxe/media)"
+          mkdir -p target/release-assets
+          cp "native/$PLATFORM/xavi.hdll" "target/release-assets/xavi-$PLATFORM.hdll"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hdll-${{ matrix.platform }}
+          path: hlavi/target/release-assets/*.hdll
+          if-no-files-found: error
+
+  mobile:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, platform: ios-aarch64, target: aarch64-apple-ios }
+          - { os: macos-latest, platform: ios-aarch64-sim, target: aarch64-apple-ios-sim }
+          - { os: ubuntu-24.04, platform: android-aarch64, target: aarch64-linux-android }
+          - { os: ubuntu-24.04, platform: android-armv7, target: armv7-linux-androideabi }
+          - { os: ubuntu-24.04, platform: android-x86_64, target: x86_64-linux-android }
+    defaults:
+      run:
+        shell: bash
+        working-directory: hlavi
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: hlavi
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: ./hlavi/.github/actions/sources
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hlavi
+          shared-key: release-${{ matrix.platform }}
+      - uses: nttld/setup-ndk@v1
+        if: startsWith(matrix.platform, 'android')
+        with:
+          ndk-version: r27
+      - name: Install cargo-ndk
+        if: startsWith(matrix.platform, 'android')
+        run: cargo install cargo-ndk --locked --version 4.1.2
+      - name: Build the static archive for embedding hosts
+        env:
+          TARGET: ${{ matrix.target }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          if [[ "$PLATFORM" == android-* ]]; then
+            cargo ndk -t "$TARGET" --platform 28 rustc --release --locked --lib --crate-type staticlib
+          else
+            cargo rustc --release --locked --target "$TARGET" --lib --crate-type staticlib
+          fi
+          git diff --exit-code -- haxe/media
+          test -z "$(git ls-files --others --exclude-standard haxe/media)"
+          mkdir -p target/mobile-package
+          cp "target/$TARGET/release/libhlavi.a" target/mobile-package/
+          cp LICENSE README.md target/mobile-package/
+          python3 -m zipfile -c "target/hlavi-$PLATFORM.zip" target/mobile-package/*
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mobile-${{ matrix.platform }}
+          path: hlavi/target/hlavi-*.zip
+          if-no-files-found: error
+
+  package:
+    needs: [plan, check, native, mobile]
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: hlavi
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: hlavi
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: ./hlavi/.github/actions/sources
+      - uses: actions/download-artifact@v8
+        with:
+          path: hlavi/target/release-assets
+          merge-multiple: true
+      - name: Package the Haxe API and checksummed download manifest
+        env:
+          TAG: ${{ needs.plan.outputs.tag || 'nightly' }}
+        run: |
+          python3 scripts/package_haxelib.py target/release-assets --tag "$TAG" --revision "$GITHUB_SHA"
+          python3 scripts/release_check.py notes target/release-assets/release-notes.md
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release
+          path: hlavi/target/release-assets/
+          if-no-files-found: error
+
+  publish:
+    needs: [plan, package]
+    if: needs.plan.outputs.tag != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ needs.plan.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: release
+          path: release
+      - name: Point nightly at the completed build
+        if: env.TAG == 'nightly'
+        run: |
+          git tag --force nightly "$GITHUB_SHA"
+          git push --force origin refs/tags/nightly
+      - uses: softprops/action-gh-release@v3
+        with:
+          body_path: release/release-notes.md
+          tag_name: ${{ env.TAG }}
+          target_commitish: ${{ github.sha }}
+          files: |
+            release/*.zip
+            release/*.hdll
+            release/hdlls.json
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          prerelease: ${{ env.TAG == 'nightly' }}
+          make_latest: ${{ env.TAG == 'nightly' && 'false' || 'true' }}

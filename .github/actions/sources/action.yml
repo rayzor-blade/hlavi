@@ -1,0 +1,40 @@
+name: Pinned native sources
+description: Check out the xavi implementation and x-idl generator beside hlavi.
+runs:
+  using: composite
+  steps:
+    - id: pins
+      shell: bash
+      working-directory: hlavi
+      run: |
+        python3 scripts/release_check.py pins
+        python3 - <<'PY' >> "$GITHUB_OUTPUT"
+        import json
+        sources = json.load(open('release-sources.json'))
+        for name in ['xavi', 'x-idl', 'hashlink']:
+            key = name.replace('-', '_')
+            print(f"{key}_repo={sources[name]['repository']}")
+            print(f"{key}_rev={sources[name]['revision']}")
+        PY
+    - uses: actions/checkout@v7
+      with:
+        repository: ${{ steps.pins.outputs.xavi_repo }}
+        ref: ${{ steps.pins.outputs.xavi_rev }}
+        path: xavi
+        persist-credentials: false
+    - uses: actions/checkout@v7
+      with:
+        repository: ${{ steps.pins.outputs.x_idl_repo }}
+        ref: ${{ steps.pins.outputs.x_idl_rev }}
+        path: x-idl
+        persist-credentials: false
+    - shell: bash
+      working-directory: hlavi
+      run: python3 scripts/release_check.py pins --checkouts
+outputs:
+  hashlink_repository:
+    description: HashLink source for the Windows import library
+    value: ${{ steps.pins.outputs.hashlink_repo }}
+  hashlink_revision:
+    description: HashLink source revision
+    value: ${{ steps.pins.outputs.hashlink_rev }}
