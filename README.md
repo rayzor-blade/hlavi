@@ -1,13 +1,93 @@
 # hlavi
 
-hlavi packages [xavi](https://github.com/rayzor-blade/xavi)'s media API for
-Haxe programs on Ash and HashLink. Both runtimes use the same generated
-`media` package and native library, loaded as `xavi.hdll`.
+Play media files with synchronized audio and video, work with video frames
+and PCM audio, and manage encoded media chunks from Haxe on Ash and HashLink.
+hlavi exposes [xavi](https://github.com/rayzor-blade/xavi)'s media API through
+the shared `media` package.
 
-xavi owns the IDL, Rust media implementation, platform codecs, container
-writers, and generator. hlavi owns the Ash/HashLink adapter, generated Haxe
-sources, native packaging, and runtime integration tests. The shared
-`hl_xidl` carriers come from [hlwgpu](https://github.com/rayzor-blade/hlwgpu).
+## Quick start
+
+With Haxe and Ash installed, download `hlavi.zip` from the
+[hlavi releases](https://github.com/rayzor-blade/hlavi/releases) and
+`ash-future.zip` from the [Ash releases](https://github.com/rayzor-blade/ash/releases).
+Install both packages:
+
+```sh
+haxelib install /path/to/ash-future.zip
+haxelib install /path/to/hlavi.zip
+```
+
+Create `Main.hx` to work with both an RGBA video frame and a PCM audio buffer.
+This example creates media data in memory, reads its dimensions and frame
+count, and releases it:
+
+```haxe
+import haxe.Int64;
+import haxe.io.Bytes;
+import media.AudioData;
+import media.AudioDataInit;
+import media.AudioSampleFormat;
+import media.VideoFrame;
+import media.VideoFrameBufferInit;
+import media.VideoPixelFormat;
+
+class Main {
+    static function main() {
+        // A 2 × 2 video frame containing four opaque red pixels.
+        var pixels = Bytes.alloc(2 * 2 * 4);
+        for (pixel in 0...4) {
+            pixels.set(pixel * 4, 255);     // Red
+            pixels.set(pixel * 4 + 3, 255); // Alpha
+        }
+        var video = VideoFrame.create(pixels, new VideoFrameBufferInit(
+            VideoPixelFormat.RGBA,
+            Int64.ofInt(2), Int64.ofInt(2), Int64.ofInt(0)
+        ));
+        trace(video.codedWidth());  // 2
+        trace(video.codedHeight()); // 2
+        video.close();
+
+        // A mono PCM buffer with 1,024 samples at 48 kHz.
+        var audio = AudioData.create(new AudioDataInit(
+            AudioSampleFormat.S16, 48000,
+            Int64.ofInt(1024), Int64.ofInt(1), Int64.ofInt(0),
+            Bytes.alloc(2048)
+        ));
+        trace(audio.numberOfFrames()); // 1024
+        audio.close();
+    }
+}
+```
+
+Compile and run it:
+
+```sh
+haxe -lib hlavi -main Main -hl main.hl
+ash main.hl
+```
+
+`NativeInstall` automatically downloads and stages the matching native library
+when Haxe compiles your program. Applications need no Rust/C compiler or native
+bridge. For stock HashLink, see [runtime behavior](#runtime-behavior).
+
+## Play a video with sound
+
+[The video player](examples/player/README.md) uses `media.MediaPlayer` for
+native decoding, audio output, playback timing, pause, and seeking. hlwgpu
+renders its video frames, and hlwindow provides the window and input, entirely
+from Haxe. Install the `hlwgpu.zip` and `hlwindow.zip` release packages
+alongside the packages above, then run from the hlavi repository:
+
+```sh
+haxe examples/player/player.hxml
+ash target/player/player.hl examples/assets/30903-383991331.mp4
+```
+
+It plays the included video with sound and supports pause, seek, mute,
+fullscreen, and resizing with the aspect ratio preserved. The desktop example
+runs on macOS, Windows, and Linux; mobile hosts use the same native playback API.
+See the [example guide](examples/player/README.md) for controls and platform
+requirements.
 
 ## Current API
 
@@ -27,26 +107,23 @@ file playback through the native framework, independently of those sessions. Dev
 packet-level container reading, GPU frames, and browser media are also outside this initial
 surface. The adapter includes no FFmpeg dependency or fallback.
 
-## Video player example
+## Runtime behavior
 
-[The video player](examples/player/README.md) uses hlavi, hlwgpu, and hlwindow
-entirely from Haxe. With the local native libraries already built, run:
+Counts, byte sizes, and timestamps use `haxe.Int64` to preserve the ABI's full
+range. PCM samples use the host's byte order. Media snapshots own their data,
+and clones keep storage alive after the original handle is closed. Explicitly
+close media, chunks, and returned plane layouts; wrapper collection does not
+close handles. A loaded library serves one VM, including its threads. Hosts
+embedding multiple independent VMs need a context-selection hook before
+sharing this library.
 
-```sh
-python3 scripts/run_player.py
-```
+Ash provides the Future ABI. For stock HashLink, add `-D ash_future_stock`
+and use the packaged `ash-future` haxelib, which stages `ash_future.hdll`.
+Make the bytecode directory visible to the OS library loader (`LD_LIBRARY_PATH`
+on Linux, `DYLD_LIBRARY_PATH` on macOS, or `PATH` on Windows). Future errors
+raise when awaited, while synchronous validation errors raise at the call.
 
-It plays `examples/assets/30903-383991331.mp4` with sound, supports pause, seek,
-mute and fullscreen, and preserves aspect ratio when resized. The desktop runner supports macOS, Windows, and Linux; mobile hosts use the
-same native playback API.
-
-## Install a release
-
-GitHub Actions builds the native libraries and publishes them with `hlavi.zip`
-on the [releases page](https://github.com/rayzor-blade/hlavi/releases). Install
-that ZIP with `haxelib install /path/to/hlavi.zip` and use `-lib hlavi`.
-Install the matching `ash-future` package for the Future API. Applications need
-no Rust/C compiler or custom native bridge.
+## Native installation
 
 The Haxelib contains the generated Haxe API, `NativeInstall`, and a release
 manifest. On the first Haxe compilation, `NativeInstall` downloads the host's
@@ -77,6 +154,14 @@ downloads. HLC builds skip automatic staging and use separate static linking.
 A Git/source installation fetches the manifest for the version named in
 `native/hdlls.json` when no local library is present. Install a release ZIP to
 keep the Haxe sources and native binary matched, especially for nightlies.
+
+## Architecture
+
+xavi owns the IDL, Rust media implementation, platform codecs, container
+writers, and generator. hlavi owns the Ash/HashLink adapter, generated Haxe
+sources, native packaging, and runtime integration tests. Both runtimes load
+the same native library as `xavi.hdll`. The shared `hl_xidl` carriers come from
+[hlwgpu](https://github.com/rayzor-blade/hlwgpu).
 
 ## Release automation
 
@@ -146,48 +231,21 @@ and linker. On Windows, set `HL_LIB_DIR` to the directory containing
 Android MediaCodec, or system GStreamer on Linux; see xavi for capabilities.
 The initial media data operations themselves do not open a codec.
 
-## Use from Haxe
-
-Install the `ash-future` ZIP from the Ash release assets and register this working directory:
+Register the local Haxe sources to use this checkout instead of an installed
+release package:
 
 ```sh
-haxelib install /path/to/ash-future.zip
 haxelib dev hlavi /path/to/hlavi
 haxe -lib hlavi -cp examples -main MediaData -hl media.hl
 ash media.hl
 ```
 
-The Haxelib macro installs the host library as described above. A developer
-checkout can use the staged local build from `scripts/build.py`.
+With the sibling hlwgpu and hlwindow libraries and Ash already built, the local
+player runner compiles and launches the example:
 
-```haxe
-import haxe.Int64;
-import haxe.io.Bytes;
-import media.AudioData;
-import media.AudioDataInit;
-import media.AudioSampleFormat;
-
-var data = AudioData.create(new AudioDataInit(
-    AudioSampleFormat.S16, 48000,
-    Int64.ofInt(1024), Int64.ofInt(1), Int64.ofInt(0), Bytes.alloc(2048)
-));
-trace(data.numberOfFrames());
-data.close();
+```sh
+python3 scripts/run_player.py
 ```
-
-Counts, byte sizes, and timestamps use `haxe.Int64` to preserve the ABI's full
-range. PCM samples use the host's byte order. Media snapshots own their data,
-and clones keep storage alive after the original handle is closed. Explicitly
-close media, chunks, and returned plane layouts; wrapper collection does not
-close handles. A loaded library serves one VM, including its threads. Hosts
-embedding multiple independent VMs need a context-selection hook before
-sharing this library.
-
-Ash provides the Future ABI. For stock HashLink, add `-D ash_future_stock`
-and use the packaged `ash-future` haxelib, which stages `ash_future.hdll`.
-Make the bytecode directory visible to the OS library loader (`LD_LIBRARY_PATH`
-on Linux, `DYLD_LIBRARY_PATH` on macOS, or `PATH` on Windows). Future errors
-raise when awaited, while synchronous validation errors raise at the call.
 
 ## Tests
 
