@@ -112,6 +112,9 @@ class InstallerTest(unittest.TestCase):
         command = ["haxe", "-cp", str(self.root / "haxe"), "-cp", str(self.work), "-main", "Main",
                    f"-{flag}", str(self.output / f"main.{extension}"), "--macro", "hlavi.macro.NativeInstall.stage()",
                    "-D", f"hlavi_cache={self.cache}", "-D", f"hlavi_release_url={self.base}"]
+        if target == "hlc":
+            # Exercise HLC generation and installer hooks without building a VM executable.
+            command += ["-D", "no-compilation"]
         for define in defines:
             command += ["-D", define]
         result = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=30)
@@ -203,6 +206,7 @@ class InstallerTest(unittest.TestCase):
     def test_skip_native_for_embedding_hlc_and_non_hl(self):
         self.compile("hlavi_no_hdll")
         self.compile(target="hlc")
+        self.assertTrue((self.output / "main.c").is_file())
         self.compile(target="js")
         self.assertFalse(self.hdll.exists())
         self.assertEqual(self.requests, [])
