@@ -4,7 +4,7 @@
   "license": "MIT",
   "tags": ["audio", "video", "media", "hashlink", "ash"],
   "description": "xavi's generated media API for Haxe on Ash and HashLink.",
-  "contributors": ["darmie"],
+  "contributors": ["rayzor", "darmie"],
   "version": "0.1.0",
   "releasenote": "Generated media data and native cross-platform file playback for Ash and HashLink.",
   "classPath": "haxe",
