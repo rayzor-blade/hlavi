@@ -5,8 +5,8 @@
   "tags": ["audio", "video", "media", "hashlink", "ash"],
   "description": "xavi's generated media API for Haxe on Ash and HashLink.",
   "contributors": ["rayzor", "darmie"],
-  "version": "0.1.0",
-  "releasenote": "Generated media data and native cross-platform file playback for Ash and HashLink.",
+  "version": "0.1.1",
+  "releasenote": "Native H.264 encoding selects the level for viewport resolutions and tags its color conversion matrix.",
   "classPath": "haxe",
   "dependencies": { "ash-future": "" }
 }
