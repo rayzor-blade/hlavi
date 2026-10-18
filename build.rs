@@ -7,6 +7,17 @@ fn main() {
         .expect("generating the Ash/HashLink media primitives");
     std::fs::write(out.join("media.rs"), model).expect("writing the media primitives");
 
+    // A page's side module: the wire to its agent, and the backend that forwards to the browser player.
+    if std::env::var("CARGO_CFG_TARGET_FAMILY").as_deref() == Ok("wasm") {
+        let wire = xavi_bindgen::browser_wire().expect("generating the media wire");
+        std::fs::write(out.join("media_wire.rs"), wire.rust).expect("writing the media wire");
+        std::fs::write(out.join("page").join(xavi_backend::WIRE_MODULE), &wire.js)
+            .expect("writing the page's wire module");
+        let backend = xavi_bindgen::web_backend(xavi_bindgen::Runtime::HashLink, xavi_backend::WEB)
+            .expect("generating the web backend");
+        std::fs::write(out.join("media_web_backend.rs"), backend).expect("writing the web backend");
+    }
+
     let root = PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap());
     for file in xavi_bindgen::haxe(xavi_bindgen::haxe::Runtime::HashLink)
         .expect("generating the Haxe media API")

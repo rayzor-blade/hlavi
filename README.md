@@ -150,7 +150,26 @@ The generated native surface currently provides:
 - `MediaDemuxer` and `MediaMuxer`: incremental MP4 packet reading and writing
   within xavi's current AAC/H.264 codec and container profile.
 
-Device capture, GPU frames, and browser media remain outside this surface.
+Device capture and GPU frames remain outside this surface.
+
+## In a browser
+
+On Ash's `wasm32-wasip1-threads` target, `MediaPlayer` plays audio in a page: it
+opens a file by a URL relative to the page and plays it on an audio element
+that the page keeps for the program. `state`, `position`, `duration` and
+`volume` are read without a call, a seek reads back at once, and a play the
+browser refuses before the user has pressed or typed is made at the next press.
+A file that is not there, or that the browser cannot play, raises where the
+state is read. There are no video frames (`pollFrame` is false) and no
+equalizer yet, and the rest of the surface, media data, codecs, queues and
+muxers, raises that it is not available on the web.
+
+A build defined `wasm` stages `xavi.wasm`, `xavi.mjs` and `xavi_wire.mjs` beside
+the program, from `web/` in the Haxelib ZIP or from the directory
+`-D hlavi_web=<directory>` names; `scripts/build_wasm.sh` makes them from a
+checkout, with a Rust nightly no newer than `nightly-2026-08-25` (the standard
+library of 1.101's nightlies imports `pthread_key_*`, which Ash does not define
+yet). Put the media files beside the page and open them by name.
 The adapter includes no FFmpeg dependency or fallback.
 
 ## Runtime behavior

@@ -11,10 +11,21 @@ import sys.FileSystem;
 import sys.io.File;
 import sys.io.Process;
 
-/** Download/cache the matching release binary and stage it beside HL bytecode. */
+/**
+ * Download/cache the matching release binary and stage it beside HL bytecode.
+ * A build defined `wasm` is for a page: it gets the web build's `xavi.wasm` and
+ * the scripts that run beside it (`web/` in the package, or the directory
+ * `-D hlavi_web` names) in place of the desktop library.
+ */
 class NativeInstall {
+    static final WEB_FILES = ["xavi.wasm", "xavi.mjs", "xavi_wire.mjs"];
+
     public static function stage():Void {
         if (!Context.defined("hl") || Context.defined("hlc") || Context.defined("hlavi_no_hdll")) return;
+        if (Context.defined("wasm")) {
+            stageWeb();
+            return;
+        }
         Context.onAfterGenerate(() -> {
             try {
                 var source = Context.definedValue("hlavi_hdll");
@@ -24,6 +35,24 @@ class NativeInstall {
                 if (FileSystem.fullPath(source) != FileSystem.absolutePath(destination)) File.copy(source, destination);
             } catch (error:Dynamic) {
                 Context.fatalError('hlavi: $error', Context.currentPos());
+            }
+        });
+    }
+
+    static function stageWeb():Void {
+        Context.onAfterGenerate(() -> {
+            var module = Context.resolvePath("hlavi/macro/NativeInstall.hx");
+            var root = Path.directory(Path.directory(Path.directory(Path.directory(module))));
+            var web = Context.defined("hlavi_web") ? Context.definedValue("hlavi_web") : Path.join([root, "web"]);
+            var into = Path.directory(Compiler.getOutput());
+            for (name in WEB_FILES) {
+                var source = Path.join([web, name]);
+                if (!FileSystem.exists(source)) {
+                    Context.fatalError('hlavi is missing $source; install the release Haxelib ZIP, or name the wasm build with -D hlavi_web=<directory>', Context.currentPos());
+                    return;
+                }
+                var destination = Path.join([into, name]);
+                if (Path.normalize(source) != Path.normalize(destination)) File.copy(source, destination);
             }
         });
     }

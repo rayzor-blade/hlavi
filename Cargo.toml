@@ -18,11 +18,14 @@ doctest = false
 # CI downloads xavi-sdk.zip at the release/revision in release-sources.json.
 # Its portable sources unpack here; sibling Git checkouts also work locally.
 xavi-core = { path = "../xavi/crates/xavi-core" }
-xavi-backend = { path = "../xavi/crates/xavi-backend" }
 # Reuse hlwgpu's carriers, including managed records, GC roots and Ash Futures.
 hl_xidl = { git = "https://github.com/rayzor-blade/hlwgpu.git", rev = "8c330296253235bea752cc444c96a6c7cd6114bc" }
 hl_abi = { git = "https://github.com/rayzor-blade/hl_abi" }
 ash_future_abi = { git = "https://github.com/rayzor-blade/ash.git", rev = "ac80cdb17c9fe82a0e86ab893e9d7304d5319fe6" }
+
+# The native backend; a page's has no use for the codecs, and the browser backend is built from the crate's sources.
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+xavi-backend = { path = "../xavi/crates/xavi-backend" }
 
 [build-dependencies]
 xavi-backend = { path = "../xavi/crates/xavi-backend" }

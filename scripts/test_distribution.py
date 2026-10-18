@@ -41,6 +41,26 @@ class PackageTest(unittest.TestCase):
                                  json.loads((ROOT / "haxelib.json").read_text())["version"])
         self.assertEqual((ROOT / "native/hdlls.json").read_bytes(), original)
 
+    def test_the_web_build_is_carried_when_given(self):
+        catalogue = json.loads((ROOT / "native/hdlls.json").read_text())
+        with tempfile.TemporaryDirectory() as temporary:
+            assets = Path(temporary) / "assets"
+            web = Path(temporary) / "web"
+            assets.mkdir()
+            web.mkdir()
+            for platform, entry in catalogue["platforms"].items():
+                (assets / entry["releaseAsset"]).write_bytes(platform.encode())
+            with ZipFile(package(assets, "nightly", "b" * 40)) as archive:
+                self.assertFalse(any(name.startswith("web/") for name in archive.namelist()))
+            for name in ("xavi.wasm", "xavi.mjs"):
+                (web / name).write_bytes(name.encode())
+            with self.assertRaises(ValueError):
+                package(assets, "nightly", "b" * 40, web)
+            (web / "xavi_wire.mjs").write_bytes(b"wire")
+            with ZipFile(package(assets, "nightly", "b" * 40, web)) as archive:
+                self.assertEqual(archive.read("web/xavi.wasm"), b"xavi.wasm")
+                self.assertEqual(archive.read("web/xavi_wire.mjs"), b"wire")
+
     def test_incomplete_release_fails(self):
         with tempfile.TemporaryDirectory() as temporary:
             assets = Path(temporary)

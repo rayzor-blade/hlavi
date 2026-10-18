@@ -8,6 +8,8 @@ import re
 from zipfile import ZIP_DEFLATED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
+# What a web build stages beside its output, from the wasm build's directory.
+WEB_FILES = ("xavi.wasm", "xavi.mjs", "xavi_wire.mjs")
 SEMVER = re.compile(r"(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(alpha|beta|rc)(\.(0|[1-9]\d*))?)?")
 
 
@@ -23,12 +25,16 @@ def version_of(tag):
     return version
 
 
-def package(assets, tag, revision):
+def package(assets, tag, revision, web=None):
     manifest = json.loads((ROOT / "native/hdlls.json").read_text())
     missing = [entry["releaseAsset"] for entry in manifest["platforms"].values()
                if not (assets / entry["releaseAsset"]).is_file()]
     if missing:
         raise ValueError("missing release HDLLs: " + ", ".join(missing))
+    if web is not None:
+        absent = [name for name in WEB_FILES if not (web / name).is_file()]
+        if absent:
+            raise ValueError("missing web files: " + ", ".join(absent))
     metadata = json.loads((ROOT / "haxelib.json").read_text())
     if tag != "nightly":
         metadata["version"] = version_of(tag)
@@ -55,6 +61,9 @@ def package(assets, tag, revision):
         for source in sources:
             if source.is_file() and source.suffix in {".hx", ".hxml", ".md"}:
                 archive.write(source, source.relative_to(ROOT))
+        if web is not None:
+            for name in WEB_FILES:
+                archive.write(web / name, f"web/{name}")
     return output
 
 
@@ -63,9 +72,10 @@ def main():
     parser.add_argument("assets", type=Path, help="directory containing every CI xavi-<platform>.hdll")
     parser.add_argument("--tag", required=True, help="v<version> or nightly")
     parser.add_argument("--revision", required=True, help="hlavi commit built by CI")
+    parser.add_argument("--web", type=Path, help="directory holding the wasm build's " + ", ".join(WEB_FILES) + ", for a web build to stage")
     args = parser.parse_args()
     try:
-        output = package(args.assets, args.tag, args.revision)
+        output = package(args.assets, args.tag, args.revision, args.web)
     except (ValueError, OSError) as error:
         parser.error(str(error))
     print(f"Packaged {output}; NativeInstall downloads each host's release asset")

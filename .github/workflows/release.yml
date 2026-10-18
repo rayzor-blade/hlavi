@@ -202,8 +202,64 @@ jobs:
           path: hlavi/target/hlavi-*.zip
           if-no-files-found: error
 
+  wasm:
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: hlavi
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: hlavi
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: ./hlavi/.github/actions/sources
+
+      # A side module is position-independent and the shipped core and std are not, so they are rebuilt: that needs nightly and
+      # rust-src. Rust's nightlies from October 2026 (1.101) make std import pthread_key_*, which Ash does not define, so a side
+      # module built with one cannot be loaded. This is the last that does not; RUST_NIGHTLY has the build script use it by name.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-08-25
+          targets: wasm32-wasip1-threads
+          components: rust-src, llvm-tools
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: hlavi
+          shared-key: release-wasm
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Build
+        env:
+          RUST_NIGHTLY: nightly-2026-08-25
+        run: scripts/build_wasm.sh "$PWD/wasm-out"
+
+      # Nothing inside the module calls a primitive: the program does, by name, after loading it. If one is missing, it is
+      # missing quietly.
+      - name: Every primitive is exported
+        run: |
+          missing=0
+          for p in $(sed -n 's/.*@:hlNative("xavi", "\([^"]*\)").*/hlp_\1/p' haxe/media/*.hx | sort -u); do
+            strings wasm-out/xavi.wasm | grep -q "$p" || { echo "::error::$p is not exported"; missing=1; }
+          done
+          exit $missing
+      - run: |
+          node --check wasm-out/xavi.mjs
+          node --check wasm-out/xavi_wire.mjs
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hlavi-wasm-ash
+          path: hlavi/wasm-out/
+          if-no-files-found: error
+
   package:
-    needs: [plan, check, native, mobile]
+    needs: [plan, check, native, mobile, wasm]
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -225,7 +281,7 @@ jobs:
         env:
           TAG: ${{ needs.plan.outputs.tag || 'nightly' }}
         run: |
-          python3 scripts/package_haxelib.py target/release-assets --tag "$TAG" --revision "$GITHUB_SHA"
+          python3 scripts/package_haxelib.py target/release-assets --tag "$TAG" --revision "$GITHUB_SHA" --web target/release-assets
           python3 scripts/release_check.py notes target/release-assets/release-notes.md
       - uses: actions/upload-artifact@v7
         with:
