@@ -20,10 +20,12 @@ def pins(checkouts=False, sdk=False):
         if not re.fullmatch(r"[0-9a-f]{40}", source["revision"]):
             raise ValueError(f"{name} must be pinned to a full commit SHA")
     manifest = tomllib.loads((ROOT / "Cargo.toml").read_text())
-    for section, crates in [("dependencies", ["xavi-core", "xavi-backend"]),
-                            ("build-dependencies", ["xavi-backend", "xavi-bindgen"])]:
+    native = manifest["target"]['cfg(not(target_family = "wasm"))']
+    for table, crates in [(manifest["dependencies"], ["xavi-core"]),
+                          (native["dependencies"], ["xavi-backend"]),
+                          (manifest["build-dependencies"], ["xavi-backend", "xavi-bindgen"])]:
         for crate in crates:
-            if manifest[section][crate].get("path") != f"../xavi/crates/{crate}":
+            if table[crate].get("path") != f"../xavi/crates/{crate}":
                 raise ValueError(f"{crate} must use the extracted xavi SDK beside hlavi")
     if sdk:
         verify(ROOT.parent, sources["xavi"])
