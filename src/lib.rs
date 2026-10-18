@@ -17,7 +17,6 @@
     clippy::all
 )]
 #![allow(unsafe_op_in_unsafe_fn)]
-
 #![cfg_attr(
     all(target_arch = "wasm32", target_feature = "atomics"),
     feature(stdarch_wasm_atomic_wait, thread_local)
@@ -39,9 +38,9 @@ mod runtime {
 
     pub mod host {
         use hl_xidl::ErrorKind;
-        pub use hl_xidl::host::throw_pending;
         #[cfg(target_family = "wasm")]
         pub use hl_xidl::host::agent;
+        pub use hl_xidl::host::throw_pending;
 
         pub fn raise(kind: ErrorKind, message: &str) {
             let prefix = match kind {
