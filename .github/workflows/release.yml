@@ -241,11 +241,13 @@ jobs:
         run: scripts/build_wasm.sh "$PWD/wasm-out"
 
       # Nothing inside the module calls a primitive: the program does, by name, after loading it. If one is missing, it is
-      # missing quietly.
+      # missing quietly. x-idl emits the two that copy a returned buffer out only for a call that returns bytes, and a page
+      # has none.
       - name: Every primitive is exported
         run: |
           missing=0
           for p in $(sed -n 's/.*@:hlNative("xavi", "\([^"]*\)").*/hlp_\1/p' haxe/media/*.hx | sort -u); do
+            case $p in hlp_buffer_result_len | hlp_buffer_result_copy) continue ;; esac
             strings wasm-out/xavi.wasm | grep -q "$p" || { echo "::error::$p is not exported"; missing=1; }
           done
           exit $missing
